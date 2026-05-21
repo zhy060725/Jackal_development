@@ -1,8 +1,76 @@
 # PROJECT_LOG
 
-本文件记录 Jackal ROS2 Python 开发项目中的设计信息、接口决策和待确认问题。后续每次新增模块、调整接口或改变部署方式时，应同步更新本文件。
+本文件记录 Jackal 开发项目中的设计信息、接口决策和待确认问题。后续每次新增模块、调整接口或改变部署方式时，应同步更新本文件。
 
-## 2026-05-07 基本运动系统设计记录
+## 2026-05-21 ROS1 Jackal 运动兼容包
+
+### 背景
+
+已在新环境中 build 好 `jackal` 和 `jackal_robot` 相关内容。后续开发确定基于 ROS1/catkin，不再继续使用 2026-05-07 的 ROS2 Foxy 原型包。
+
+### 已确认设计
+
+- 当前底层运动兼容包采用 ROS1/catkin。
+- ROS package 名称采用历史命令中反复出现的 `my_robot_package`。
+- 保留历史 launch 文件名：
+  - `move_to_goal.launch`
+  - `move_to_goal1.launch`
+  - `move_to_goal2.launch`
+  - `turn_circle.launch`
+  - `odom_test.launch`
+- 默认速度输出 topic 采用 `/cmd_vel`，兼容历史命令和 Jackal 底盘控制入口。
+- 默认里程计 topic 采用 `/odometry/filtered`。
+- 不再维护 `jackal_basic_motion` 和 `jackal_motion_interfaces` ROS2 包。
+
+### 当前模块结构
+
+```text
+my_robot_package/
+  CMakeLists.txt
+  package.xml
+  setup.py
+  launch/
+    move_to_goal.launch
+    move_to_goal1.launch
+    move_to_goal2.launch
+    turn_circle.launch
+    odom_test.launch
+  src/
+    move_to_goal.py
+    turn_circle.py
+    odom_test.py
+    my_robot_package/
+      motion_mapper.py
+  test/
+```
+
+### 当前推荐 ROS1 数据流
+
+```text
+my_robot_package node
+  -> /cmd_vel
+  -> jackal_base / jackal_control
+  -> Jackal base controller
+```
+
+### 当前推荐运动映射
+
+- `forward`: `linear.x = +speed * linear_speed`
+- `backward`: `linear.x = -speed * linear_speed`
+- `left`: `angular.z = +speed * angular_speed`
+- `right`: `angular.z = -speed * angular_speed`
+- `stop`: `linear.x = 0.0`, `angular.z = 0.0`
+
+### 本地验证记录
+
+- 已通过纯 Python 运动映射测试。
+- 已通过 launch 文件兼容性测试。
+- 已通过 Python 语法检查。
+- 尚未在 Jackal 实车主机上完成 `catkin_make` 或 `catkin build` 后的实车运行验证。
+
+## 2026-05-07 基本运动系统设计记录（已废弃）
+
+以下记录保留为历史背景。对应 ROS2 包已删除，不再作为当前开发路线。
 
 ### 背景
 

@@ -1,0 +1,7 @@
+<launch>
+  <arg name="odom_topic" default="/odometry/filtered"/>
+
+  <node pkg="my_robot_package" type="odom_test.py" name="odom_test" output="screen">
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+  </node>
+</launch>
