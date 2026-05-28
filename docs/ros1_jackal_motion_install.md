@@ -76,6 +76,22 @@ roslaunch my_robot_package turn_circle.launch
 roslaunch my_robot_package odom_test.launch
 ```
 
+启动 GUI 运动控制：
+
+```bash
+roslaunch my_robot_package motion_gui.launch
+```
+
+GUI 需要图形桌面环境和 Tkinter。如果主机缺少 Tkinter，需要安装系统包，例如 Ubuntu 上的 `python3-tk`。
+
+启动终端键盘控制：
+
+```bash
+rosrun my_robot_package keyboard_control.py
+```
+
+键盘控制使用当前终端读取按键，推荐用 `rosrun` 启动。`keyboard_control.launch` 也提供同名参数，但 `roslaunch` 在部分环境下不会把终端输入传给节点。
+
 ## 参数
 
 `move_to_goal.launch` 支持：
@@ -104,6 +120,39 @@ publish_rate: 20.0
 
 ```text
 odom_topic: /odometry/filtered
+```
+
+`motion_gui.launch` 支持：
+
+```text
+cmd_vel_topic: /cmd_vel
+linear_speed: 0.1
+angular_speed: 0.2
+publish_rate: 20.0
+```
+
+`keyboard_control.py` 支持 ROS private parameters：
+
+```text
+cmd_vel_topic: /cmd_vel
+linear_speed: 0.1
+angular_speed: 0.2
+initial_speed: 0.3
+speed_step: 0.1
+publish_rate: 20.0
+```
+
+键位：
+
+```text
+Up: forward
+Down: backward
+Left: left
+Right: right
++ or =: increase speed
+- or _: decrease speed
+Space: stop
+q or Esc: quit
 ```
 
 ## 低速验证

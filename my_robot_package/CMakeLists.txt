@@ -14,7 +14,9 @@ catkin_package(
 )
 
 catkin_install_python(PROGRAMS
+  src/keyboard_control.py
   src/move_to_goal.py
+  src/motion_gui.py
   src/turn_circle.py
   src/odom_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

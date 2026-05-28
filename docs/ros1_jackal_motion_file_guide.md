@@ -13,14 +13,19 @@ my_robot_package/
     move_to_goal.launch
     move_to_goal1.launch
     move_to_goal2.launch
+    motion_gui.launch
+    keyboard_control.launch
     turn_circle.launch
     odom_test.launch
   src/
     move_to_goal.py
+    motion_gui.py
+    keyboard_control.py
     turn_circle.py
     odom_test.py
     my_robot_package/
       __init__.py
+      keyboard_control_state.py
       motion_mapper.py
   test/
     test_launch_compatibility.py
@@ -56,6 +61,7 @@ catkin 构建入口。它做三件事：
 ```cmake
 catkin_install_python(PROGRAMS
   src/move_to_goal.py
+  src/motion_gui.py
   src/turn_circle.py
   src/odom_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -154,6 +160,43 @@ roslaunch my_robot_package odom_test.launch odom_topic:=/jackal_velocity_control
 
 如果新环境中的里程计 topic 不同，用 `odom_topic:=...` 覆盖。
 
+### `motion_gui.launch`
+
+启动 `src/motion_gui.py`，提供桌面 GUI 控制方向和速度。
+
+默认行为：
+
+```text
+cmd_vel_topic: /cmd_vel
+linear_speed: 0.1
+angular_speed: 0.2
+publish_rate: 20.0
+```
+
+常用命令：
+
+```bash
+roslaunch my_robot_package motion_gui.launch
+roslaunch my_robot_package motion_gui.launch linear_speed:=0.2 angular_speed:=0.4
+```
+
+GUI 需要图形桌面环境和 Tkinter。如果主机缺少 Tkinter，需要安装 `python3-tk`。
+
+### `keyboard_control.launch`
+
+启动 `src/keyboard_control.py`。这个 launch 文件用于参数配置和包入口完整性，但终端键盘输入更推荐用 `rosrun my_robot_package keyboard_control.py`，因为 `roslaunch` 在部分环境下不会把当前终端 stdin 传给节点。
+
+默认行为：
+
+```text
+cmd_vel_topic: /cmd_vel
+linear_speed: 0.1
+angular_speed: 0.2
+initial_speed: 0.3
+speed_step: 0.1
+publish_rate: 20.0
+```
+
 ## Python 节点脚本
 
 ### `src/move_to_goal.py`
@@ -207,6 +250,64 @@ launch args
 
 如果需要完整姿态角，后续可以在这里加入 quaternion 到 yaw 的转换。
 
+### `src/motion_gui.py`
+
+桌面运动控制 GUI。它使用 Tkinter 创建方向按钮、速度滑条、停止按钮，并按固定频率发布 `geometry_msgs/Twist` 到 `/cmd_vel`。
+
+数据流：
+
+```text
+GUI button/slider
+  -> motion_gui.py
+  -> motion_mapper.map_motion_command()
+  -> geometry_msgs/Twist
+  -> /cmd_vel
+```
+
+界面行为：
+
+- `Forward`、`Backward`、`Left`、`Right` 设置当前方向。
+- `Stop` 设置方向为 `stop`，速度为 `0.0`，并立即发布零速度。
+- 速度滑条范围是 `0.0` 到 `1.0`。
+- 点击方向按钮且速度为 `0.0` 时，默认把速度提到 `0.3`，避免按钮看似无效。
+- 关闭窗口时发布一次停止命令。
+
+可改入口：
+
+- 发布 topic：改 `motion_gui.launch` 的 `cmd_vel_topic`。
+- 最大线速度和角速度：改 `linear_speed`、`angular_speed`。
+- GUI 布局和按钮行为：改 `motion_gui.py`。
+
+### `src/keyboard_control.py`
+
+终端键盘控制节点。它读取当前终端的按键输入，把方向和速度状态转换为 `Twist` 并持续发布到 `/cmd_vel`。
+
+推荐运行：
+
+```bash
+rosrun my_robot_package keyboard_control.py
+```
+
+按键：
+
+```text
+Up arrow: forward
+Down arrow: backward
+Left arrow: left
+Right arrow: right
++ or =: increase normalized speed by speed_step
+- or _: decrease normalized speed by speed_step
+Space: stop and zero speed
+q or Esc: quit
+```
+
+说明：
+
+- 按方向键时，如果当前速度为 `0.0`，节点会自动使用 `initial_speed`。
+- 按一次 `+` 或 `-` 会按 `speed_step` 改变归一化速度。
+- 速度会被限制在 `[0.0, 1.0]`。
+- 退出节点时会发布一次停止命令。
+
 ## Python 逻辑模块
 
 ### `src/my_robot_package/motion_mapper.py`
@@ -240,6 +341,21 @@ stop     -> linear_x = 0.0, angular_z = 0.0
 - `VALID_DIRECTIONS`
 - `map_motion_command()`
 - `test/test_motion_mapper.py`
+
+### `src/my_robot_package/keyboard_control_state.py`
+
+纯 Python 键盘状态模块，不依赖 ROS。它负责把按键映射成当前方向和归一化速度。
+
+当前映射：
+
+```text
+Arrow keys -> direction
+Space -> stop
++ / = -> speed + speed_step
+- / _ -> speed - speed_step
+```
+
+新增键位或改变键位行为时，先改这里和 `test/test_keyboard_control.py`，再改 `keyboard_control.py`。
 
 ### `src/my_robot_package/__init__.py`
 
@@ -285,7 +401,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest my_robot_package/test/test_launch_compat
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest my_robot_package/test -v
-python3 -m py_compile my_robot_package/src/my_robot_package/motion_mapper.py my_robot_package/src/move_to_goal.py my_robot_package/src/turn_circle.py my_robot_package/src/odom_test.py
+python3 -m py_compile my_robot_package/src/my_robot_package/motion_mapper.py my_robot_package/src/my_robot_package/keyboard_control_state.py my_robot_package/src/move_to_goal.py my_robot_package/src/motion_gui.py my_robot_package/src/keyboard_control.py my_robot_package/src/turn_circle.py my_robot_package/src/odom_test.py
 ```
 
 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` 用于避开本机 ROS2 pytest 插件和当前 ROS1 包测试之间的插件冲突。
@@ -324,6 +440,18 @@ roslaunch jackal_base base.launch
 source ~/catkin_ws/devel/setup.bash
 roslaunch my_robot_package move_to_goal.launch direction:=forward speed:=0.3 duration:=2.0
 roslaunch my_robot_package move_to_goal.launch direction:=stop speed:=0.0 duration:=1.0
+```
+
+GUI 控制：
+
+```bash
+roslaunch my_robot_package motion_gui.launch
+```
+
+键盘控制：
+
+```bash
+rosrun my_robot_package keyboard_control.py
 ```
 
 同时可观察：

@@ -19,6 +19,8 @@ def test_legacy_launch_files_exist():
         "move_to_goal.launch",
         "move_to_goal1.launch",
         "move_to_goal2.launch",
+        "motion_gui.launch",
+        "keyboard_control.launch",
         "turn_circle.launch",
         "odom_test.launch",
     ]
@@ -35,3 +37,11 @@ def test_move_to_goal_launches_use_move_to_goal_script():
 def test_turn_and_odom_launch_files_use_expected_scripts():
     assert "turn_circle.py" in _node_types("turn_circle.launch")
     assert "odom_test.py" in _node_types("odom_test.launch")
+
+
+def test_motion_gui_launch_file_uses_expected_script():
+    assert "motion_gui.py" in _node_types("motion_gui.launch")
+
+
+def test_keyboard_control_launch_file_uses_expected_script():
+    assert "keyboard_control.py" in _node_types("keyboard_control.launch")

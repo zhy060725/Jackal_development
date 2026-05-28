@@ -1,0 +1,13 @@
+<launch>
+  <arg name="cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="linear_speed" default="0.1"/>
+  <arg name="angular_speed" default="0.2"/>
+  <arg name="publish_rate" default="20.0"/>
+
+  <node pkg="my_robot_package" type="motion_gui.py" name="motion_gui" output="screen">
+    <param name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <param name="linear_speed" value="$(arg linear_speed)"/>
+    <param name="angular_speed" value="$(arg angular_speed)"/>
+    <param name="publish_rate" value="$(arg publish_rate)"/>
+  </node>
+</launch>
