@@ -1,9 +1,3 @@
-ARROW_UP = "\x1b[A"
-ARROW_DOWN = "\x1b[B"
-ARROW_RIGHT = "\x1b[C"
-ARROW_LEFT = "\x1b[D"
-
-
 class KeyboardControlState(object):
     def __init__(self, direction="stop", speed=0.0, speed_step=0.1, default_speed=0.3):
         self.direction = direction
@@ -25,13 +19,13 @@ def clamp_speed(speed):
 
 
 def apply_key(state, key):
-    if key == ARROW_UP:
+    if key == 'w':
         return _with_direction(state, "forward")
-    if key == ARROW_DOWN:
+    if key == 's':
         return _with_direction(state, "backward")
-    if key == ARROW_LEFT:
+    if key == 'a':
         return _with_direction(state, "left")
-    if key == ARROW_RIGHT:
+    if key == 'd':
         return _with_direction(state, "right")
     if key == " ":
         return state.copy(direction="stop", speed=0.0)
