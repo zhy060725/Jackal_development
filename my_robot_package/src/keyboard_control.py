@@ -16,10 +16,10 @@ from my_robot_package.motion_mapper import MotionLimits, map_motion_command
 HELP_TEXT = """
 Jackal keyboard control
 
-  Arrow Up     forward
-  Arrow Down   backward
-  Arrow Left   left
-  Arrow Right  right
+  w            forward
+  d            backward
+  a            left
+  s            right
   + / =        increase speed
   - / _        decrease speed
   Space        stop
