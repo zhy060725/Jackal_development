@@ -1,0 +1,10 @@
+<launch>
+  <arg name="config_file" default="$(find my_robot_package)/config/semantic_motion_controller.yaml"/>
+
+  <node pkg="my_robot_package"
+        type="semantic_motion_controller.py"
+        name="semantic_motion_controller"
+        output="screen">
+    <rosparam command="load" file="$(arg config_file)"/>
+  </node>
+</launch>

@@ -8,13 +8,13 @@ sys.path.insert(0, str(PACKAGE_SRC))
 from my_robot_package.keyboard_control_state import KeyboardControlState, apply_key
 
 
-def test_arrow_keys_update_direction_without_changing_speed():
+def test_wasd_keys_update_direction_without_changing_speed():
     state = KeyboardControlState(direction="stop", speed=0.4, speed_step=0.1)
 
-    assert apply_key(state, "\x1b[A").direction == "forward"
-    assert apply_key(state, "\x1b[B").direction == "backward"
-    assert apply_key(state, "\x1b[D").direction == "left"
-    right = apply_key(state, "\x1b[C")
+    assert apply_key(state, "w").direction == "forward"
+    assert apply_key(state, "s").direction == "backward"
+    assert apply_key(state, "a").direction == "left"
+    right = apply_key(state, "d")
 
     assert right.direction == "right"
     assert right.speed == 0.4

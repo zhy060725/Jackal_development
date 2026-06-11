@@ -21,6 +21,7 @@ def test_legacy_launch_files_exist():
         "move_to_goal2.launch",
         "motion_gui.launch",
         "keyboard_control.launch",
+        "semantic_motion_controller.launch",
         "turn_circle.launch",
         "odom_test.launch",
     ]
@@ -45,3 +46,7 @@ def test_motion_gui_launch_file_uses_expected_script():
 
 def test_keyboard_control_launch_file_uses_expected_script():
     assert "keyboard_control.py" in _node_types("keyboard_control.launch")
+
+
+def test_semantic_controller_launch_file_uses_expected_script():
+    assert "semantic_motion_controller.py" in _node_types("semantic_motion_controller.launch")

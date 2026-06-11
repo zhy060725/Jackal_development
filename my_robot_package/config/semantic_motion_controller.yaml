@@ -1,0 +1,28 @@
+cmd_vel_topic: /cmd_vel
+publish_rate: 10.0
+capture_failure_sleep_sec: 0.5
+
+detector_import_path: detector
+detector_class_name: RealSenseYOLODetector
+detector_kwargs: {}
+
+target_labels: [car, truck, vehicle]
+obstacle_labels: [cone]
+
+max_linear_speed: 0.25
+max_angular_speed: 0.8
+desired_follow_distance: 1.2
+minimum_target_distance: 0.6
+
+obstacle_avoid_distance: 1.2
+obstacle_stop_distance: 0.45
+forward_corridor_half_width: 0.35
+
+target_heading_gain: 1.5
+obstacle_turn_gain: 1.0
+
+linear_samples: 5
+angular_samples: 9
+simulation_horizon_sec: 1.0
+simulation_dt_sec: 0.1
+robot_radius: 0.3

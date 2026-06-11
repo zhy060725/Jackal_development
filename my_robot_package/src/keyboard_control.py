@@ -17,9 +17,9 @@ HELP_TEXT = """
 Jackal keyboard control
 
   w            forward
-  d            backward
+  s            backward
   a            left
-  s            right
+  d            right
   + / =        increase speed
   - / _        decrease speed
   Space        stop

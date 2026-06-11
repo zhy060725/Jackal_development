@@ -17,11 +17,16 @@ catkin_install_python(PROGRAMS
   src/keyboard_control.py
   src/move_to_goal.py
   src/motion_gui.py
+  src/semantic_motion_controller.py
   src/turn_circle.py
   src/odom_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 install(DIRECTORY launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(DIRECTORY config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

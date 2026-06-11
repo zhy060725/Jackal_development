@@ -92,6 +92,30 @@ rosrun my_robot_package keyboard_control.py
 
 键盘控制使用当前终端读取按键，推荐用 `rosrun` 启动。`keyboard_control.launch` 也提供同名参数，但 `roslaunch` 在部分环境下不会把终端输入传给节点。
 
+## 运行语义追捕与避障节点
+
+语义控制节点直接 import YOLO capture package，YOLO package 内部负责模型加载。运动控制节点不接收模型路径，也不依赖单独的 detection ROS topic。
+
+确保运行环境可以执行：
+
+```python
+from detector import RealSenseYOLODetector
+```
+
+然后启动：
+
+```bash
+roslaunch my_robot_package semantic_motion_controller.launch
+```
+
+默认行为：
+
+- 追捕标签为 `car`、`truck`、`vehicle` 的最近有效目标。
+- 避让标签为 `cone` 的目标。
+- 无有效追捕目标、检测异常、相机异常或近距离正前方障碍时发布停止命令。
+
+第一次实车测试前，应在 `my_robot_package/config/semantic_motion_controller.yaml` 中保持较低的最大线速度和角速度。
+
 ## 参数
 
 `move_to_goal.launch` 支持：
@@ -145,10 +169,10 @@ publish_rate: 20.0
 键位：
 
 ```text
-Up: forward
-Down: backward
-Left: left
-Right: right
+w: forward
+s: backward
+a: left
+d: right
 + or =: increase speed
 - or _: decrease speed
 Space: stop

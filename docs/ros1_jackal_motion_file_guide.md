@@ -15,18 +15,22 @@ my_robot_package/
     move_to_goal2.launch
     motion_gui.launch
     keyboard_control.launch
+    semantic_motion_controller.launch
     turn_circle.launch
     odom_test.launch
   src/
     move_to_goal.py
     motion_gui.py
     keyboard_control.py
+    semantic_motion_controller.py
     turn_circle.py
     odom_test.py
     my_robot_package/
       __init__.py
       keyboard_control_state.py
       motion_mapper.py
+      semantic_planner.py
+      yolo_capture_adapter.py
   test/
     test_launch_compatibility.py
     test_motion_mapper.py
@@ -197,6 +201,16 @@ speed_step: 0.1
 publish_rate: 20.0
 ```
 
+### `semantic_motion_controller.launch`
+
+加载 `config/semantic_motion_controller.yaml` 并启动 `src/semantic_motion_controller.py`。
+
+```bash
+roslaunch my_robot_package semantic_motion_controller.launch
+```
+
+该节点直接 import YOLO capture package，并由 YOLO package 内部负责模型加载，因此不需要传入 model path。
+
 ## Python 节点脚本
 
 ### `src/move_to_goal.py`
@@ -291,10 +305,10 @@ rosrun my_robot_package keyboard_control.py
 按键：
 
 ```text
-Up arrow: forward
-Down arrow: backward
-Left arrow: left
-Right arrow: right
+w: forward
+s: backward
+a: left
+d: right
 + or =: increase normalized speed by speed_step
 - or _: decrease normalized speed by speed_step
 Space: stop and zero speed
@@ -307,6 +321,17 @@ q or Esc: quit
 - 按一次 `+` 或 `-` 会按 `speed_step` 改变归一化速度。
 - 速度会被限制在 `[0.0, 1.0]`。
 - 退出节点时会发布一次停止命令。
+
+### `src/semantic_motion_controller.py`
+
+自主语义运动控制节点。它创建 YOLO detector、持续调用 `capture()`、将检测结果交给语义 planner，并把结果发布到 `/cmd_vel`。
+
+安全行为：
+
+- detector 初始化失败时发布停止。
+- `capture()` 或规划异常时发布停止。
+- 无追捕目标时发布停止。
+- 节点退出时发布停止并关闭 detector。
 
 ## Python 逻辑模块
 
@@ -349,13 +374,38 @@ stop     -> linear_x = 0.0, angular_z = 0.0
 当前映射：
 
 ```text
-Arrow keys -> direction
+WASD keys -> direction
 Space -> stop
 + / = -> speed + speed_step
 - / _ -> speed - speed_step
 ```
 
 新增键位或改变键位行为时，先改这里和 `test/test_keyboard_control.py`，再改 `keyboard_control.py`。
+
+### `src/my_robot_package/yolo_capture_adapter.py`
+
+负责动态 import YOLO capture package，并把 `CaptureResult.detections` 转成 planner 使用的统一检测对象。
+
+默认 import：
+
+```python
+from detector import RealSenseYOLODetector
+```
+
+创建 detector 时不传模型路径，只传 `detector_kwargs` 中配置的可选参数。`centroid_3d == (0.0, 0.0, 0.0)` 的无效深度检测会被过滤。
+
+### `src/my_robot_package/semantic_planner.py`
+
+纯 Python 语义局部规划器，不依赖 ROS、相机或 YOLO。
+
+它采用 DWA 风格的局部规划：
+
+1. 采样候选线速度和角速度。
+2. 模拟每个候选速度的短时轨迹。
+3. 根据追捕目标距离、目标方向、cone clearance 和绕行方向评分。
+4. 发布评分最高的安全速度。
+
+正前方 cone 小于 `obstacle_stop_distance` 时直接停止。无有效车辆目标时也停止。
 
 ### `src/my_robot_package/__init__.py`
 
@@ -401,7 +451,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest my_robot_package/test/test_launch_compat
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest my_robot_package/test -v
-python3 -m py_compile my_robot_package/src/my_robot_package/motion_mapper.py my_robot_package/src/my_robot_package/keyboard_control_state.py my_robot_package/src/move_to_goal.py my_robot_package/src/motion_gui.py my_robot_package/src/keyboard_control.py my_robot_package/src/turn_circle.py my_robot_package/src/odom_test.py
+python3 -m py_compile my_robot_package/src/my_robot_package/motion_mapper.py my_robot_package/src/my_robot_package/keyboard_control_state.py my_robot_package/src/my_robot_package/semantic_planner.py my_robot_package/src/my_robot_package/yolo_capture_adapter.py my_robot_package/src/move_to_goal.py my_robot_package/src/motion_gui.py my_robot_package/src/keyboard_control.py my_robot_package/src/semantic_motion_controller.py my_robot_package/src/turn_circle.py my_robot_package/src/odom_test.py
 ```
 
 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` 用于避开本机 ROS2 pytest 插件和当前 ROS1 包测试之间的插件冲突。
@@ -452,6 +502,12 @@ roslaunch my_robot_package motion_gui.launch
 
 ```bash
 rosrun my_robot_package keyboard_control.py
+```
+
+语义追捕与避障：
+
+```bash
+roslaunch my_robot_package semantic_motion_controller.launch
 ```
 
 同时可观察：

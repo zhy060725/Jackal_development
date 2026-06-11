@@ -1,0 +1,192 @@
+import math
+
+
+class Detection(object):
+    def __init__(self, label, confidence, x, y, z):
+        self.label = str(label).lower()
+        self.confidence = float(confidence)
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
+
+    @property
+    def has_valid_depth(self):
+        return (
+            math.isfinite(self.x)
+            and math.isfinite(self.y)
+            and math.isfinite(self.z)
+            and self.z > 0.0
+        )
+
+
+class PlannerConfig(object):
+    def __init__(
+        self,
+        target_labels=None,
+        obstacle_labels=None,
+        max_linear_speed=0.25,
+        max_angular_speed=0.8,
+        desired_follow_distance=1.2,
+        minimum_target_distance=0.6,
+        obstacle_avoid_distance=1.2,
+        obstacle_stop_distance=0.45,
+        forward_corridor_half_width=0.35,
+        target_heading_gain=1.5,
+        obstacle_turn_gain=1.0,
+        linear_samples=5,
+        angular_samples=9,
+        simulation_horizon_sec=1.0,
+        simulation_dt_sec=0.1,
+        robot_radius=0.3,
+    ):
+        self.target_labels = frozenset(target_labels or ["car", "truck", "vehicle"])
+        self.obstacle_labels = frozenset(obstacle_labels or ["cone"])
+        self.max_linear_speed = float(max_linear_speed)
+        self.max_angular_speed = float(max_angular_speed)
+        self.desired_follow_distance = float(desired_follow_distance)
+        self.minimum_target_distance = float(minimum_target_distance)
+        self.obstacle_avoid_distance = float(obstacle_avoid_distance)
+        self.obstacle_stop_distance = float(obstacle_stop_distance)
+        self.forward_corridor_half_width = float(forward_corridor_half_width)
+        self.target_heading_gain = float(target_heading_gain)
+        self.obstacle_turn_gain = float(obstacle_turn_gain)
+        self.linear_samples = max(int(linear_samples), 2)
+        self.angular_samples = max(int(angular_samples), 3)
+        self.simulation_horizon_sec = float(simulation_horizon_sec)
+        self.simulation_dt_sec = float(simulation_dt_sec)
+        self.robot_radius = float(robot_radius)
+
+
+class MotionCommand(object):
+    def __init__(self, linear_x=0.0, angular_z=0.0, reason="stop"):
+        self.linear_x = float(linear_x)
+        self.angular_z = float(angular_z)
+        self.reason = reason
+
+
+class SemanticPlanner(object):
+    def __init__(self, config=None):
+        self.config = config or PlannerConfig()
+
+    def plan(self, detections):
+        valid = [item for item in detections if item.has_valid_depth]
+        obstacles = [item for item in valid if item.label in self.config.obstacle_labels]
+
+        if self._has_stop_obstacle(obstacles):
+            return MotionCommand(reason="obstacle_stop")
+
+        targets = [item for item in valid if item.label in self.config.target_labels]
+        if not targets:
+            return MotionCommand(reason="no_target")
+
+        target = min(targets, key=lambda item: item.z)
+        if target.z <= self.config.minimum_target_distance:
+            return MotionCommand(reason="target_too_close")
+
+        return self._best_candidate(target, obstacles)
+
+    def _has_stop_obstacle(self, obstacles):
+        return any(
+            item.z <= self.config.obstacle_stop_distance
+            and abs(item.x) <= self.config.forward_corridor_half_width
+            for item in obstacles
+        )
+
+    def _best_candidate(self, target, obstacles):
+        target_x = target.z
+        target_y = -target.x
+        obstacle_points = [(item.z, -item.x) for item in obstacles]
+        initial_target_distance = math.hypot(target_x, target_y)
+        best = None
+
+        for linear_x in self._samples(0.0, self.config.max_linear_speed, self.config.linear_samples):
+            for angular_z in self._samples(
+                -self.config.max_angular_speed,
+                self.config.max_angular_speed,
+                self.config.angular_samples,
+            ):
+                trajectory = self._simulate(linear_x, angular_z)
+                clearance = self._minimum_clearance(trajectory, obstacle_points)
+                if clearance <= self.config.robot_radius:
+                    continue
+
+                final_x, final_y, final_heading = trajectory[-1]
+                target_distance = math.hypot(target_x - final_x, target_y - final_y)
+                target_bearing = math.atan2(target_y - final_y, target_x - final_x)
+                heading_error = abs(self._normalize_angle(target_bearing - final_heading))
+                progress = initial_target_distance - target_distance
+                follow_error = abs(target_distance - self.config.desired_follow_distance)
+                clearance_score = min(clearance, self.config.obstacle_avoid_distance)
+                avoidance_alignment = self._avoidance_alignment_score(angular_z, obstacle_points)
+
+                score = (
+                    4.0 * progress
+                    - 2.0 * follow_error
+                    - self.config.target_heading_gain * heading_error
+                    + 0.25 * linear_x
+                    + self.config.obstacle_turn_gain * clearance_score
+                    + 6.0 * self.config.obstacle_turn_gain * avoidance_alignment
+                )
+                candidate = (score, linear_x, angular_z)
+                if best is None or candidate[0] > best[0]:
+                    best = candidate
+
+        if best is None:
+            return MotionCommand(reason="no_safe_trajectory")
+        return MotionCommand(best[1], best[2], "pursuit")
+
+    def _simulate(self, linear_x, angular_z):
+        trajectory = [(0.0, 0.0, 0.0)]
+        x = 0.0
+        y = 0.0
+        heading = 0.0
+        dt = max(self.config.simulation_dt_sec, 0.01)
+        steps = max(int(self.config.simulation_horizon_sec / dt), 1)
+        for _ in range(steps):
+            x += linear_x * math.cos(heading) * dt
+            y += linear_x * math.sin(heading) * dt
+            heading = self._normalize_angle(heading + angular_z * dt)
+            trajectory.append((x, y, heading))
+        return trajectory
+
+    def _minimum_clearance(self, trajectory, obstacles):
+        if not obstacles:
+            return self.config.obstacle_avoid_distance
+        return min(
+            math.hypot(obstacle_x - x, obstacle_y - y)
+            for x, y, _ in trajectory
+            for obstacle_x, obstacle_y in obstacles
+        )
+
+    def _avoidance_alignment_score(self, angular_z, obstacles):
+        if not obstacles or self.config.max_angular_speed <= 0.0:
+            return 0.0
+        score = 0.0
+        normalized_turn = angular_z / self.config.max_angular_speed
+        for obstacle_x, obstacle_y in obstacles:
+            distance = math.hypot(obstacle_x, obstacle_y)
+            if distance > self.config.obstacle_avoid_distance or obstacle_y == 0.0:
+                continue
+            proximity = 1.0 - distance / max(self.config.obstacle_avoid_distance, 0.01)
+            desired_turn_sign = -1.0 if obstacle_y > 0.0 else 1.0
+            score += desired_turn_sign * normalized_turn * proximity
+        return score
+
+    @staticmethod
+    def _samples(minimum, maximum, count):
+        if count <= 1:
+            return [minimum]
+        step = (maximum - minimum) / float(count - 1)
+        return [minimum + index * step for index in range(count)]
+
+    @staticmethod
+    def _normalize_angle(angle):
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    @staticmethod
+    def _clamp(value, minimum, maximum):
+        return min(max(value, minimum), maximum)
