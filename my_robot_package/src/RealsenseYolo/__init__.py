@@ -1,1 +1,1 @@
-from detector import RealSenseYOLODetector
+from .detector import RealSenseYOLODetector

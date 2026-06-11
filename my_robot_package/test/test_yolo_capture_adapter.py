@@ -36,11 +36,12 @@ def test_normalize_drops_invalid_zero_depth():
     assert normalize_detections(grouped) == []
 
 
-def test_create_detector_imports_class_without_model_path(monkeypatch):
+def test_create_detector_imports_class_with_model_path(monkeypatch):
     module = types.ModuleType("fake_yolo_capture")
 
     class FakeDetector(object):
-        def __init__(self, confidence_threshold=0.5):
+        def __init__(self, model_path, confidence_threshold=0.5):
+            self.model_path = model_path
             self.confidence_threshold = confidence_threshold
 
     module.RealSenseYOLODetector = FakeDetector
@@ -50,7 +51,9 @@ def test_create_detector_imports_class_without_model_path(monkeypatch):
         module_name="fake_yolo_capture",
         class_name="RealSenseYOLODetector",
         detector_kwargs={"confidence_threshold": 0.7},
+        model_path="/tmp/best.pt",
     )
 
     assert isinstance(detector, FakeDetector)
+    assert detector.model_path == "/tmp/best.pt"
     assert detector.confidence_threshold == 0.7

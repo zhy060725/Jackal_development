@@ -58,9 +58,17 @@ def main():
     cmd_vel_topic = rospy.get_param("~cmd_vel_topic", "/cmd_vel")
     publish_rate = float(rospy.get_param("~publish_rate", 10.0))
     capture_failure_sleep_sec = float(rospy.get_param("~capture_failure_sleep_sec", 0.5))
-    detector_import_path = rospy.get_param("~detector_import_path", "detector")
+    detector_import_path = rospy.get_param("~detector_import_path", "RealsenseYolo")
     detector_class_name = rospy.get_param("~detector_class_name", "RealSenseYOLODetector")
     detector_kwargs = rospy.get_param("~detector_kwargs", {})
+    model_path = rospy.get_param("~model_path", "")
+    if model_path:
+        detector_kwargs["model_path"] = model_path
+    if not detector_kwargs.get("model_path"):
+        rospy.logfatal("semantic_motion_controller requires model_path for RealSenseYOLODetector")
+        publisher = rospy.Publisher(cmd_vel_topic, Twist, queue_size=1)
+        publisher.publish(Twist())
+        return
 
     publisher = rospy.Publisher(cmd_vel_topic, Twist, queue_size=1)
     planner = planner_from_params()

@@ -2,7 +2,8 @@ cmd_vel_topic: /cmd_vel
 publish_rate: 10.0
 capture_failure_sleep_sec: 0.5
 
-detector_import_path: detector
+model_path: ""
+detector_import_path: RealsenseYolo
 detector_class_name: RealSenseYOLODetector
 detector_kwargs: {}
 

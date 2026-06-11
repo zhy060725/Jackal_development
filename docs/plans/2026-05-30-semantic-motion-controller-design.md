@@ -9,13 +9,13 @@ Build the next motion-control layer for Jackal: a ROS1 node that directly uses t
 - The project remains ROS1/catkin based.
 - The Jackal base accepts `geometry_msgs/Twist` on `/cmd_vel`.
 - The YOLO package is used as an importable Python API.
-- The YOLO package owns model loading and model-path selection. The motion controller does not pass a model path.
+- The YOLO package owns model loading and prediction. The motion controller passes the configured `model_path` required by the current `RealSenseYOLODetector` constructor.
 - The available detector API follows the documented shape:
 
 ```python
-from detector import RealSenseYOLODetector
+from RealsenseYolo import RealSenseYOLODetector
 
-with RealSenseYOLODetector(...) as detector:
+with RealSenseYOLODetector(model_path, ...) as detector:
     result = detector.capture()
     detections = result.detections
 ```
@@ -124,7 +124,8 @@ my_robot_package/
 cmd_vel_topic: /cmd_vel
 publish_rate: 10.0
 
-detector_import_path: detector
+detector_import_path: RealsenseYolo
+model_path: ""
 detector_class_name: RealSenseYOLODetector
 detector_kwargs: {}
 
@@ -147,7 +148,7 @@ simulation_horizon_sec: 1.0
 simulation_dt_sec: 0.1
 ```
 
-`detector_kwargs` exists only for optional detector configuration, such as confidence threshold or camera FPS. It must not require a model path unless the YOLO package later changes its contract.
+`model_path` is required by the current camera module. `detector_kwargs` is for optional detector configuration such as confidence threshold or camera FPS.
 
 ## Safety Handling
 

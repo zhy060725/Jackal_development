@@ -94,18 +94,24 @@ rosrun my_robot_package keyboard_control.py
 
 ## 运行语义追捕与避障节点
 
-语义控制节点直接 import YOLO capture package，YOLO package 内部负责模型加载。运动控制节点不接收模型路径，也不依赖单独的 detection ROS topic。
+语义控制节点直接 import YOLO capture package，并把模型路径传给 `RealSenseYOLODetector`。它不依赖单独的 detection ROS topic。
 
 确保运行环境可以执行：
 
 ```python
-from detector import RealSenseYOLODetector
+from RealsenseYolo import RealSenseYOLODetector
 ```
 
 然后启动：
 
 ```bash
 roslaunch my_robot_package semantic_motion_controller.launch
+```
+
+需要指定模型路径：
+
+```bash
+roslaunch my_robot_package semantic_motion_controller.launch model_path:=/path/to/best.pt
 ```
 
 默认行为：
@@ -178,6 +184,27 @@ d: right
 Space: stop
 q or Esc: quit
 ```
+
+`semantic_motion_controller.launch` / `semantic_motion_controller.yaml` 支持：
+
+```text
+model_path: path to YOLO .pt model, required
+cmd_vel_topic: /cmd_vel
+publish_rate: 10.0
+detector_import_path: RealsenseYolo
+detector_class_name: RealSenseYOLODetector
+detector_kwargs: optional RealSenseYOLODetector kwargs
+target_labels: [car, truck, vehicle]
+obstacle_labels: [cone]
+max_linear_speed: 0.25
+max_angular_speed: 0.8
+desired_follow_distance: 1.2
+minimum_target_distance: 0.6
+obstacle_avoid_distance: 1.2
+obstacle_stop_distance: 0.45
+```
+
+`detector_kwargs` 可用于配置 `confidence_threshold`、`color_resolution`、`depth_resolution` 或 `fps` 等相机模块参数。通常通过 `model_path:=...` 指定模型路径即可。
 
 ## 低速验证
 

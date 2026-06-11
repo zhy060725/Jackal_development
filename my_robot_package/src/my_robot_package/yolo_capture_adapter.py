@@ -3,10 +3,18 @@ import importlib
 from my_robot_package.semantic_planner import Detection
 
 
-def create_detector(module_name="detector", class_name="RealSenseYOLODetector", detector_kwargs=None):
+def create_detector(
+    module_name="RealsenseYolo",
+    class_name="RealSenseYOLODetector",
+    detector_kwargs=None,
+    model_path=None,
+):
     module = importlib.import_module(module_name)
     detector_class = getattr(module, class_name)
-    return detector_class(**(detector_kwargs or {}))
+    kwargs = dict(detector_kwargs or {})
+    if model_path:
+        kwargs["model_path"] = model_path
+    return detector_class(**kwargs)
 
 
 def normalize_detections(grouped_detections):

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Implement a ROS1 semantic motion controller that imports the YOLO capture package, reads `CaptureResult.detections`, performs cone avoidance and vehicle pursuit, and publishes `/cmd_vel`.
+**Goal:** Implement a ROS1 semantic motion controller that imports the YOLO capture package, passes the configured model path, reads `CaptureResult.detections`, performs cone avoidance and vehicle pursuit, and publishes `/cmd_vel`.
 
 **Architecture:** Keep ROS, detector integration, and planning separated. `semantic_motion_controller.py` owns ROS node lifecycle and publishing. `yolo_capture_adapter.py` normalizes detector outputs. `semantic_planner.py` is pure Python and testable without ROS or YOLO.
 

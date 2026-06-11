@@ -207,9 +207,23 @@ publish_rate: 20.0
 
 ```bash
 roslaunch my_robot_package semantic_motion_controller.launch
+roslaunch my_robot_package semantic_motion_controller.launch model_path:=/path/to/best.pt
 ```
 
-该节点直接 import YOLO capture package，并由 YOLO package 内部负责模型加载，因此不需要传入 model path。
+该节点直接 import YOLO capture package，并把 `model_path` 传给 `RealSenseYOLODetector`。
+
+主要配置在 `my_robot_package/config/semantic_motion_controller.yaml`：
+
+```text
+model_path: path to YOLO .pt model, required
+target_labels: labels to pursue
+obstacle_labels: labels to avoid
+max_linear_speed / max_angular_speed: output speed limits
+desired_follow_distance: preferred target distance
+minimum_target_distance: stop threshold for target pursuit
+obstacle_avoid_distance: distance where cone avoidance begins
+obstacle_stop_distance: hard stop distance for cone in front
+```
 
 ## Python 节点脚本
 
@@ -389,10 +403,10 @@ Space -> stop
 默认 import：
 
 ```python
-from detector import RealSenseYOLODetector
+from RealsenseYolo import RealSenseYOLODetector
 ```
 
-创建 detector 时不传模型路径，只传 `detector_kwargs` 中配置的可选参数。`centroid_3d == (0.0, 0.0, 0.0)` 的无效深度检测会被过滤。
+创建 detector 时会传入 `model_path`，并附加 `detector_kwargs` 中配置的可选参数。`centroid_3d == (0.0, 0.0, 0.0)` 的无效深度检测会被过滤。
 
 ### `src/my_robot_package/semantic_planner.py`
 
@@ -508,6 +522,7 @@ rosrun my_robot_package keyboard_control.py
 
 ```bash
 roslaunch my_robot_package semantic_motion_controller.launch
+roslaunch my_robot_package semantic_motion_controller.launch model_path:=/path/to/best.pt
 ```
 
 同时可观察：
