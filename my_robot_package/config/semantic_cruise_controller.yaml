@@ -1,0 +1,7 @@
+target_labels: [green_car, truck, vehicle]
+obstacle_labels: [black_cone, red_cone]
+
+cruise_linear_speed: 0.25
+cruise_heading_weight: 1.0
+cruise_speed_weight: 1.0
+cruise_clearance_weight: 1.0

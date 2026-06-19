@@ -17,6 +17,7 @@ catkin_install_python(PROGRAMS
   src/keyboard_control.py
   src/move_to_goal.py
   src/motion_gui.py
+  src/semantic_cruise_controller.py
   src/semantic_motion_controller.py
   src/turn_circle.py
   src/odom_test.py

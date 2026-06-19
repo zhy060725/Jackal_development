@@ -1,0 +1,79 @@
+from my_robot_package.semantic_planner import MotionCommand, PlannerConfig, SemanticPlanner
+
+
+class CruisePlannerConfig(PlannerConfig):
+    def __init__(
+        self,
+        cruise_linear_speed=None,
+        cruise_heading_weight=1.0,
+        cruise_speed_weight=1.0,
+        cruise_clearance_weight=1.0,
+        **kwargs
+    ):
+        super(CruisePlannerConfig, self).__init__(**kwargs)
+        if cruise_linear_speed is None:
+            cruise_linear_speed = self.max_linear_speed
+        self.cruise_linear_speed = min(
+            max(float(cruise_linear_speed), 0.0), self.max_linear_speed
+        )
+        self.cruise_heading_weight = float(cruise_heading_weight)
+        self.cruise_speed_weight = float(cruise_speed_weight)
+        self.cruise_clearance_weight = float(cruise_clearance_weight)
+
+
+class SemanticCruisePlanner(SemanticPlanner):
+    def __init__(self, config=None):
+        super(SemanticCruisePlanner, self).__init__(config or CruisePlannerConfig())
+
+    def plan(self, detections):
+        valid = [item for item in detections if item.has_valid_depth]
+        obstacles = [
+            item for item in valid if item.label in self.config.obstacle_labels
+        ]
+
+        if self._has_stop_obstacle(obstacles):
+            return MotionCommand(reason="obstacle_stop")
+
+        targets = [item for item in valid if item.label in self.config.target_labels]
+        if targets:
+            return super(SemanticCruisePlanner, self).plan(valid)
+
+        return self._best_cruise_candidate(obstacles)
+
+    def _best_cruise_candidate(self, obstacles):
+        obstacle_points = [(item.z, -item.x) for item in obstacles]
+        best = None
+
+        for linear_x in self._samples(
+            0.0, self.config.cruise_linear_speed, self.config.linear_samples
+        ):
+            for angular_z in self._samples(
+                -self.config.max_angular_speed,
+                self.config.max_angular_speed,
+                self.config.angular_samples,
+            ):
+                trajectory = self._simulate(linear_x, angular_z)
+                clearance = self._minimum_clearance(trajectory, obstacle_points)
+                if clearance <= self.config.robot_radius:
+                    continue
+
+                final_heading = trajectory[-1][2]
+                clearance_score = min(clearance, self.config.obstacle_avoid_distance)
+                avoidance_alignment = self._avoidance_alignment_score(
+                    angular_z, obstacle_points
+                )
+                score = (
+                    self.config.cruise_speed_weight * linear_x
+                    - self.config.cruise_heading_weight * abs(final_heading)
+                    + self.config.cruise_clearance_weight * clearance_score
+                    + 6.0
+                    * self.config.obstacle_turn_gain
+                    * avoidance_alignment
+                )
+                candidate = (score, linear_x, angular_z)
+                if best is None or candidate[0] > best[0]:
+                    best = candidate
+
+        if best is None:
+            return MotionCommand(reason="no_safe_trajectory")
+        return MotionCommand(best[1], best[2], "cruise")

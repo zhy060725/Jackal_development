@@ -16,6 +16,7 @@ my_robot_package/
     motion_gui.launch
     keyboard_control.launch
     semantic_motion_controller.launch
+    semantic_cruise_controller.launch
     turn_circle.launch
     odom_test.launch
   src/
@@ -23,17 +24,20 @@ my_robot_package/
     motion_gui.py
     keyboard_control.py
     semantic_motion_controller.py
+    semantic_cruise_controller.py
     turn_circle.py
     odom_test.py
     my_robot_package/
       __init__.py
       keyboard_control_state.py
       motion_mapper.py
+      semantic_cruise_planner.py
       semantic_planner.py
       yolo_capture_adapter.py
   test/
     test_launch_compatibility.py
     test_motion_mapper.py
+    test_semantic_cruise_planner.py
 ```
 
 这个包的目标是保留历史主机上已经使用过的命令入口，同时把底层运动逻辑写成更容易理解和维护的代码。
@@ -216,6 +220,8 @@ roslaunch my_robot_package semantic_motion_controller.launch model_path:=/path/t
 
 ```text
 model_path: path to YOLO .pt model, required
+detector_kwargs:
+  confidence_threshold: 0.02
 target_labels: labels to pursue
 obstacle_labels: labels to avoid
 max_linear_speed / max_angular_speed: output speed limits
@@ -224,6 +230,16 @@ minimum_target_distance: stop threshold for target pursuit
 obstacle_avoid_distance: distance where cone avoidance begins
 obstacle_stop_distance: hard stop distance for cone in front
 ```
+
+### `semantic_cruise_controller.launch`
+
+先加载 `config/semantic_motion_controller.yaml`，再用 `config/semantic_cruise_controller.yaml` 覆盖巡航专用参数，最后启动独立的 `src/semantic_cruise_controller.py`。
+
+```bash
+roslaunch my_robot_package semantic_cruise_controller.launch model_path:=/path/to/best.pt
+```
+
+无 `green_car` 时节点继续巡航，并避让 `black_cone` 和 `red_cone`；检测到目标后复用已有追捕评分。基础速度、避障距离和 detector 参数来自原配置，扩展配置只保存标签及巡航评分参数。
 
 ## Python 节点脚本
 
@@ -347,6 +363,10 @@ q or Esc: quit
 - 无追捕目标时发布停止。
 - 节点退出时发布停止并关闭 detector。
 
+### `src/semantic_cruise_controller.py`
+
+独立巡航语义控制节点。相机和目标处理方式与旧语义节点一致，但无目标时调用巡航 planner，而不是发布 `no_target` 停止。捕获异常、近障、无安全轨迹和退出时仍发布停止命令。
+
 ## Python 逻辑模块
 
 ### `src/my_robot_package/motion_mapper.py`
@@ -420,6 +440,10 @@ from RealsenseYolo import RealSenseYOLODetector
 4. 发布评分最高的安全速度。
 
 正前方 cone 小于 `obstacle_stop_distance` 时直接停止。无有效车辆目标时也停止。
+
+### `src/my_robot_package/semantic_cruise_planner.py`
+
+继承现有语义 planner 的轨迹模拟、碰撞检查和追捕逻辑。没有目标时，对候选轨迹的前进速度、直行程度和 cone 净空评分，返回 `reason=cruise`；没有安全候选轨迹时返回零速度。
 
 ### `src/my_robot_package/__init__.py`
 
@@ -523,6 +547,12 @@ rosrun my_robot_package keyboard_control.py
 ```bash
 roslaunch my_robot_package semantic_motion_controller.launch
 roslaunch my_robot_package semantic_motion_controller.launch model_path:=/path/to/best.pt
+```
+
+无目标巡航、cone 避障和绿车追捕：
+
+```bash
+roslaunch my_robot_package semantic_cruise_controller.launch model_path:=/path/to/best.pt
 ```
 
 同时可观察：

@@ -23,7 +23,7 @@ def _planner():
 
 
 def test_target_ahead_produces_forward_motion():
-    command = _planner().plan([Detection("car", 0.9, 0.0, 0.0, 2.0)])
+    command = _planner().plan([Detection("green_car", 0.9, 0.0, 0.0, 2.0)])
 
     assert command.linear_x > 0.0
     assert abs(command.angular_z) < 0.1
@@ -31,7 +31,7 @@ def test_target_ahead_produces_forward_motion():
 
 
 def test_target_to_left_produces_left_turn():
-    command = _planner().plan([Detection("car", 0.9, -0.5, 0.0, 2.0)])
+    command = _planner().plan([Detection("green_car", 0.9, -0.5, 0.0, 2.0)])
 
     assert command.linear_x > 0.0
     assert command.angular_z > 0.0
@@ -40,8 +40,8 @@ def test_target_to_left_produces_left_turn():
 def test_close_cone_in_forward_corridor_forces_stop():
     command = _planner().plan(
         [
-            Detection("car", 0.9, 0.0, 0.0, 2.0),
-            Detection("cone", 0.9, 0.1, 0.0, 0.3),
+            Detection("green_car", 0.9, 0.0, 0.0, 2.0),
+            Detection("black_cone", 0.9, 0.1, 0.0, 0.3),
         ]
     )
 
@@ -51,11 +51,11 @@ def test_close_cone_in_forward_corridor_forces_stop():
 
 
 def test_cone_on_left_biases_motion_to_right():
-    clear = _planner().plan([Detection("car", 0.9, 0.0, 0.0, 2.0)])
+    clear = _planner().plan([Detection("green_car", 0.9, 0.0, 0.0, 2.0)])
     avoiding = _planner().plan(
         [
-            Detection("car", 0.9, 0.0, 0.0, 2.0),
-            Detection("cone", 0.9, -0.25, 0.0, 0.8),
+            Detection("green_car", 0.9, 0.0, 0.0, 2.0),
+            Detection("red_cone", 0.9, -0.25, 0.0, 0.8),
         ]
     )
 
@@ -64,7 +64,7 @@ def test_cone_on_left_biases_motion_to_right():
 
 
 def test_no_valid_target_returns_stop():
-    command = _planner().plan([Detection("cone", 0.9, 0.8, 0.0, 2.0)])
+    command = _planner().plan([Detection("black_cone", 0.9, 0.8, 0.0, 2.0)])
 
     assert command.linear_x == 0.0
     assert command.angular_z == 0.0

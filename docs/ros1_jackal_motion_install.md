@@ -116,11 +116,19 @@ roslaunch my_robot_package semantic_motion_controller.launch model_path:=/path/t
 
 默认行为：
 
-- 追捕标签为 `car`、`truck`、`vehicle` 的最近有效目标。
-- 避让标签为 `cone` 的目标。
+- 追捕标签为 `green_car`、`truck`、`vehicle` 的最近有效目标。
+- 避让标签为 `black_cone`、`red_cone` 的目标。
 - 无有效追捕目标、检测异常、相机异常或近距离正前方障碍时发布停止命令。
 
 第一次实车测试前，应在 `my_robot_package/config/semantic_motion_controller.yaml` 中保持较低的最大线速度和角速度。
+
+需要在没有绿车时继续巡航并避障，使用独立的巡航节点：
+
+```bash
+roslaunch my_robot_package semantic_cruise_controller.launch model_path:=/path/to/best.pt
+```
+
+该节点无目标时根据 RealSense 检测到的 cone 选择安全前进轨迹；检测到绿车后复用追捕策略。相机捕获异常、正前方近障或没有安全轨迹时停车。系统仅依赖 RealSense，无法规避未进入视野或未被模型检测到的障碍。
 
 ## 参数
 
@@ -193,9 +201,10 @@ cmd_vel_topic: /cmd_vel
 publish_rate: 10.0
 detector_import_path: RealsenseYolo
 detector_class_name: RealSenseYOLODetector
-detector_kwargs: optional RealSenseYOLODetector kwargs
-target_labels: [car, truck, vehicle]
-obstacle_labels: [cone]
+detector_kwargs:
+  confidence_threshold: 0.02
+target_labels: [green_car, truck, vehicle]
+obstacle_labels: [black_cone, red_cone]
 max_linear_speed: 0.25
 max_angular_speed: 0.8
 desired_follow_distance: 1.2
@@ -205,6 +214,15 @@ obstacle_stop_distance: 0.45
 ```
 
 `detector_kwargs` 可用于配置 `confidence_threshold`、`color_resolution`、`depth_resolution` 或 `fps` 等相机模块参数。通常通过 `model_path:=...` 指定模型路径即可。
+
+`semantic_cruise_controller.launch` 先加载上述基础配置，再加载 `semantic_cruise_controller.yaml`：
+
+```text
+cruise_linear_speed: 0.25
+cruise_heading_weight: 1.0
+cruise_speed_weight: 1.0
+cruise_clearance_weight: 1.0
+```
 
 ## 低速验证
 

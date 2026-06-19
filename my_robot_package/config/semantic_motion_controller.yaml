@@ -5,10 +5,11 @@ capture_failure_sleep_sec: 0.5
 model_path: ""
 detector_import_path: RealsenseYolo
 detector_class_name: RealSenseYOLODetector
-detector_kwargs: {}
+detector_kwargs:
+  confidence_threshold: 0.02
 
-target_labels: [car, truck, vehicle]
-obstacle_labels: [cone]
+target_labels: [green_car, truck, vehicle]
+obstacle_labels: [black_cone, red_cone]
 
 max_linear_speed: 0.25
 max_angular_speed: 0.8

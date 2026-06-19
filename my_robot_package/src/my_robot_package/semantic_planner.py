@@ -39,8 +39,8 @@ class PlannerConfig(object):
         simulation_dt_sec=0.1,
         robot_radius=0.3,
     ):
-        self.target_labels = frozenset(target_labels or ["car", "truck", "vehicle"])
-        self.obstacle_labels = frozenset(obstacle_labels or ["cone"])
+        self.target_labels = frozenset(target_labels or ["green_car", "truck", "vehicle"])
+        self.obstacle_labels = frozenset(obstacle_labels or ["black_cone", "red_cone"])
         self.max_linear_speed = float(max_linear_speed)
         self.max_angular_speed = float(max_angular_speed)
         self.desired_follow_distance = float(desired_follow_distance)
