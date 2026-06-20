@@ -1,0 +1,236 @@
+import math
+import random  # 引入随机数，用于打破正前方障碍物的对称僵局
+
+
+class Detection(object):
+    def __init__(self, label, confidence, x, y, z):
+        self.label = str(label).lower()
+        self.confidence = float(confidence)
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
+
+    @property
+    def has_valid_depth(self):
+        return (
+            math.isfinite(self.x)
+            and math.isfinite(self.y)
+            and math.isfinite(self.z)
+            and self.z > 0.0
+        )
+
+
+class PlannerConfig(object):
+    def __init__(
+        self,
+        target_labels=None,
+        obstacle_labels=None,
+        max_linear_speed=0.25,
+        max_angular_speed=0.8,
+        desired_follow_distance=1.2,
+        minimum_target_distance=0.6,
+        obstacle_avoid_distance=1.2,
+        obstacle_stop_distance=0.45,
+        forward_corridor_half_width=0.35,
+        target_heading_gain=1.5,
+        obstacle_turn_gain=1.0,
+        linear_samples=5,
+        angular_samples=9,
+        simulation_horizon_sec=1.0,
+        simulation_dt_sec=0.1,
+        robot_radius=0.3,
+    ):
+        self.target_labels = frozenset(target_labels or ["green_car", "truck", "vehicle"])
+        self.obstacle_labels = frozenset(obstacle_labels or ["black_cone", "red_cone"])
+        self.max_linear_speed = float(max_linear_speed)
+        self.max_angular_speed = float(max_angular_speed)
+        self.desired_follow_distance = float(desired_follow_distance)
+        self.minimum_target_distance = float(minimum_target_distance)
+        self.obstacle_avoid_distance = float(obstacle_avoid_distance)
+        self.obstacle_stop_distance = float(obstacle_stop_distance)
+        self.forward_corridor_half_width = float(forward_corridor_half_width)
+        self.target_heading_gain = float(target_heading_gain)
+        self.obstacle_turn_gain = float(obstacle_turn_gain)
+        self.linear_samples = max(int(linear_samples), 2)
+        self.angular_samples = max(int(angular_samples), 3)
+        self.simulation_horizon_sec = float(simulation_horizon_sec)
+        self.simulation_dt_sec = float(simulation_dt_sec)
+        self.robot_radius = float(robot_radius)
+
+
+class MotionCommand(object):
+    def __init__(self, linear_x=0.0, angular_z=0.0, reason="stop"):
+        self.linear_x = float(linear_x)
+        self.angular_z = float(angular_z)
+        self.reason = reason
+
+
+class SemanticPlanner(object):
+    def __init__(self, config=None):
+        self.config = config or PlannerConfig()
+        # 初始化一个持续的随机转向倾向（1或-1），每当正前方遇到障碍物时提供基础参考
+        self._default_bypass_bias = random.choice([-1.0, 1.0])
+
+    def plan(self, detections):
+        valid = [item for item in detections if item.has_valid_depth]
+        obstacles = [item for item in valid if item.label in self.config.obstacle_labels]
+
+        # 如果是非常近的紧急硬碰撞风险，触发基础保护，但在巡航中我们将尽量通过 DWA 绕开
+        if self._has_stop_obstacle(obstacles):
+            # 即使硬阻挡，也进行微弱的原地转向尝试脱困，而不直接锁死
+            escape_turn = self._get_escape_turn_direction(obstacles)
+            return MotionCommand(0.0, escape_turn * self.config.max_angular_speed * 0.5, reason="obstacle_stop")
+
+        targets = [item for item in valid if item.label in self.config.target_labels]
+        if not targets:
+            # 如果没有追踪车辆，返回空以便 cruise 规划器接管
+            return MotionCommand(reason="no_target")
+
+        target = min(targets, key=lambda item: item.z)
+        if target.z <= self.config.minimum_target_distance:
+            return MotionCommand(reason="target_too_close")
+
+        return self._best_candidate(target, obstacles)
+
+    def _has_stop_obstacle(self, obstacles):
+        # 仅当障碍物极其贴脸且在正前方通道时触发
+        return any(
+            item.z <= (self.config.obstacle_stop_distance * 0.8)
+            and abs(item.x) <= (self.config.forward_corridor_half_width * 0.8)
+            for item in obstacles
+        )
+
+    def _get_escape_turn_direction(self, obstacles):
+        """辅助函数：计算哪边障碍物少，返回远离障碍物的方向"""
+        if not obstacles:
+            return random.choice([-1.0, 1.0])
+        left_count = sum(1 for item in obstacles if item.x > 0)
+        right_count = sum(1 for item in obstacles if item.x < 0)
+        if left_count == right_count:
+            return random.choice([-1.0, 1.0])
+        return -1.0 if left_count > right_count else 1.0
+
+    def _best_candidate(self, target, obstacles):
+        # 转换为标准右手系物理坐标（左正右负：x为前进距离，y为左侧横向偏离）
+        target_x = target.z
+        target_y = target.x  # 去除变号负号
+        obstacle_points = [(item.z, item.x) for item in obstacles]
+        initial_target_distance = math.hypot(target_x, target_y)
+        best = None
+
+        for linear_x in self._samples(0.0, self.config.max_linear_speed, self.config.linear_samples):
+            for angular_z in self._samples(
+                -self.config.max_angular_speed,
+                self.config.max_angular_speed,
+                self.config.angular_samples,
+            ):
+                trajectory = self._simulate(linear_x, angular_z)
+                clearance = self._minimum_clearance(trajectory, obstacle_points)
+                
+                # 如果轨迹会撞到机器人半径内，正常流程予以排除
+                if clearance <= self.config.robot_radius:
+                    continue
+
+                final_x, final_y, final_heading = trajectory[-1]
+                target_distance = math.hypot(target_x - final_x, target_y - final_y)
+                target_bearing = math.atan2(target_y - final_y, target_x - final_x)
+                heading_error = abs(self._normalize_angle(target_bearing - final_heading))
+                progress = initial_target_distance - target_distance
+                follow_error = abs(target_distance - self.config.desired_follow_distance)
+                clearance_score = min(clearance, self.config.obstacle_avoid_distance)
+                avoidance_alignment = self._avoidance_alignment_score(angular_z, obstacle_points)
+
+                score = (
+                    4.0 * progress
+                    - 2.0 * follow_error
+                    - self.config.target_heading_gain * heading_error
+                    + 0.25 * linear_x
+                    + self.config.obstacle_turn_gain * clearance_score
+                    + 6.0 * self.config.obstacle_turn_gain * avoidance_alignment
+                )
+                candidate = (score, linear_x, angular_z)
+                if best is None or candidate[0] > best[0]:
+                    best = candidate
+
+        # 核心改动 2：兜底避险脱困机制，彻底避免卡死
+        if best is None:
+            # 只要无法规划出绝对安全的路径，不发布死等刹车，而是降速并打方向转弯脱困
+            escape_direction = self._get_escape_turn_direction(obstacles)
+            # 每次卡死时有 10% 的概率随机切换脱困基准方向，防止在墙角等对称地形死循环
+            if random.random() < 0.1:
+                escape_direction *= -1.0
+            return MotionCommand(
+                linear_x=self.config.max_linear_speed * 0.2,  # 极其缓慢地蠕动前进
+                angular_z=escape_direction * self.config.max_angular_speed * 0.6,  # 转向远离障碍物
+                reason="cruise_escape"
+            )
+            
+        return MotionCommand(best[1], best[2], "pursuit")
+
+    def _simulate(self, linear_x, angular_z):
+        trajectory = [(0.0, 0.0, 0.0)]
+        x = 0.0
+        y = 0.0
+        heading = 0.0
+        dt = max(self.config.simulation_dt_sec, 0.01)
+        steps = max(int(self.config.simulation_horizon_sec / dt), 1)
+        for _ in range(steps):
+            x += linear_x * math.cos(heading) * dt
+            y += linear_x * math.sin(heading) * dt
+            heading = self._normalize_angle(heading + angular_z * dt)
+            trajectory.append((x, y, heading))
+        return trajectory
+
+    def _minimum_clearance(self, trajectory, obstacles):
+        if not obstacles:
+            return self.config.obstacle_avoid_distance
+        return min(
+            math.hypot(obstacle_x - x, obstacle_y - y)
+            for x, y, _ in trajectory
+            for obstacle_x, obstacle_y in obstacles
+        )
+
+    def _avoidance_alignment_score(self, angular_z, obstacles):
+        if not obstacles or self.config.max_angular_speed <= 0.0:
+            return 0.0
+        score = 0.0
+        normalized_turn = angular_z / self.config.max_angular_speed
+        
+        for obstacle_x, obstacle_y in obstacles:
+            distance = math.hypot(obstacle_x, obstacle_y)
+            if distance > self.config.obstacle_avoid_distance:
+                continue
+            proximity = 1.0 - distance / max(self.config.obstacle_avoid_distance, 0.01)
+            
+            # 核心改动 1：解决正中间障碍物无法规划的问题
+            if abs(obstacle_y) < 0.05:
+                # 如果障碍物几乎垂直在正前方中心线上，随机或者使用持续偏置来打破平衡
+                desired_turn_sign = self._default_bypass_bias
+                # 每次触发时有概率调换偏置，以防单侧完全锁死
+                if random.random() < 0.05:
+                    self._default_bypass_bias *= -1.0
+            else:
+                # 标准避障：障碍物在左侧(>0)则希望向右转(<0, 即 -1.0)；障碍物在右侧(<0)则希望向左开(>0, 即 1.0)
+                desired_turn_sign = -1.0 if obstacle_y > 0.0 else 1.0
+                
+            score += desired_turn_sign * normalized_turn * proximity
+        return score
+
+    @staticmethod
+    def _samples(minimum, maximum, count):
+        if count <= 1:
+            return [minimum]
+        step = (maximum - minimum) / float(count - 1)
+        return [minimum + index * step for index in range(count)]
+
+    @staticmethod
+    def _normalize_angle(angle):
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    @staticmethod
+    def _clamp(value, minimum, maximum):
+        return min(max(value, minimum), maximum)
