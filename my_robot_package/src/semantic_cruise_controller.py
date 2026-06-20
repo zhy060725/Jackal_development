@@ -112,7 +112,8 @@ def main():
 
         while not rospy.is_shutdown():
             try:
-                capture_result = detector.capture()
+                capture_rgb, capture_depth = detector.capture()
+                capture_result = detector.predict(capture_rgb, capture_depth)
                 detections = normalize_detections(capture_result.detections)
                 command = planner.plan(detections)
                 publisher.publish(twist_from_command(command))
