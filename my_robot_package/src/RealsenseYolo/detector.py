@@ -106,6 +106,9 @@ class RealSenseYOLODetector:
         color_image = np.asanyarray(color_frame.get_data())
         depth_image = np.asanyarray(depth_frame.get_data())
 
+        return color_image, depth_image
+
+    def predict(self, color_image, depth_image):
         results = self.model(color_image, conf=self.confidence_threshold, verbose=False)
 
         detections = {}
@@ -126,7 +129,7 @@ class RealSenseYOLODetector:
                 cx = (x1 + x2) // 2
                 cy = (y1 + y2) // 2
 
-                centroid_3d = self._project_to_3d(cx, cy, depth_frame)
+                centroid_3d = self._project_to_3d(cx, cy, depth_image)
 
                 obj = DetectedObject(
                     label=label,
@@ -138,7 +141,7 @@ class RealSenseYOLODetector:
                 detections.setdefault(label, []).append(obj)
 
         if self.enable_green_detection:
-            green_objects = self._detect_green(color_image, depth_frame)
+            green_objects = self._detect_green(color_image, depth_image)
             if green_objects:
                 detections.setdefault("green", []).extend(green_objects)
 
@@ -148,7 +151,7 @@ class RealSenseYOLODetector:
             detections=detections,
         )
 
-    def _detect_green(self, color_image, depth_frame):
+    def _detect_green(self, color_image, depth_image):
         hsv = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
 
         mask1 = cv2.inRange(hsv, self.GREEN_LOWER1, self.GREEN_UPPER1)
@@ -173,7 +176,7 @@ class RealSenseYOLODetector:
             cx = x + w // 2
             cy = y + h // 2
 
-            centroid_3d = self._project_to_3d(cx, cy, depth_frame)
+            centroid_3d = self._project_to_3d(cx, cy, depth_image)
 
             obj = DetectedObject(
                 label="green",
@@ -186,13 +189,13 @@ class RealSenseYOLODetector:
 
         return objects
 
-    def _project_to_3d(self, cx, cy, depth_frame):
+    def _project_to_3d(self, cx, cy, depth_image):
         h = self.color_intrinsics.height
         w = self.color_intrinsics.width
         if not (0 <= cx < w and 0 <= cy < h):
             return 0.0, 0.0, 0.0
 
-        depth = depth_frame.get_distance(cx, cy)
+        depth = depth_image[cy, cx] * self.depth_scale
         if depth <= 0.0:
             return 0.0, 0.0, 0.0
 
