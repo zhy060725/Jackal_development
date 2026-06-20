@@ -19,6 +19,7 @@ catkin_install_python(PROGRAMS
   src/motion_gui.py
   src/semantic_cruise_controller.py
   src/semantic_motion_controller.py
+  src/semantic_wall_controller.py
   src/turn_circle.py
   src/odom_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

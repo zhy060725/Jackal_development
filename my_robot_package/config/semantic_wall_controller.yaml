@@ -1,0 +1,16 @@
+wall_min_depth: 0.10
+wall_max_depth: 4.00
+# 0.0 uses detector.depth_scale; set a positive value only to override it.
+wall_depth_scale: 0.0
+wall_pixel_stride: 4
+wall_angular_bins: 90
+wall_depth_percentile: 10.0
+
+wall_safety_margin: 0.20
+wall_stop_distance: 0.50
+wall_emergency_stop_distance: 0.25
+wall_turn_speed: 0.50
+
+# Set these only if the detector does not expose color_intrinsics.fx and ppx.
+camera_fx: 0.0
+camera_cx: -1.0

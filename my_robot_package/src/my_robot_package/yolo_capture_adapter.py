@@ -3,6 +3,12 @@ import importlib
 from my_robot_package.semantic_planner import Detection
 
 
+def capture_and_predict(detector):
+    capture_rgb, capture_depth, masked_depth = detector.capture()
+    capture_result = detector.predict(capture_rgb, capture_depth)
+    return capture_result, masked_depth
+
+
 def create_detector(
     module_name="RealsenseYolo",
     class_name="RealSenseYOLODetector",

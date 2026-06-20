@@ -130,6 +130,23 @@ roslaunch my_robot_package semantic_cruise_controller.launch model_path:=/path/t
 
 该节点无目标时根据 RealSense 检测到的 cone 选择安全前进轨迹；检测到绿车后复用追捕策略。相机捕获异常、正前方近障或没有安全轨迹时停车。系统仅依赖 RealSense，无法规避未进入视野或未被模型检测到的障碍。
 
+## 运行墙体避障节点
+
+墙体节点要求 detector 提供以下接口：
+
+```python
+capture_rgb, capture_depth, musk_depth = detector.capture()
+capture_result = detector.predict(capture_rgb, capture_depth)
+```
+
+`musk_depth` 必须是与图像对齐的二维数组：墙体像素保存实际深度，非墙体像素为 `0`。节点忽略零、负数和非有限值，并把有效墙体像素压缩成局部障碍点。
+
+```bash
+roslaunch my_robot_package semantic_wall_controller.launch model_path:=/path/to/best.pt
+```
+
+该节点保留默认巡航、cone 避障和绿车追捕。正前方墙体较近时停止前进并向净空侧旋转，进入紧急距离时完全停车。当前版本不识别出口，墙体 mask 中的缺口会被视为开放空间。
+
 ## 参数
 
 `move_to_goal.launch` 支持：
@@ -223,6 +240,23 @@ cruise_heading_weight: 1.0
 cruise_speed_weight: 1.0
 cruise_clearance_weight: 1.0
 ```
+
+`semantic_wall_controller.launch` 在基础和巡航配置后加载 `semantic_wall_controller.yaml`：
+
+```text
+wall_min_depth: 0.10
+wall_max_depth: 4.00
+wall_depth_scale: 0.0  # automatically use detector.depth_scale
+wall_pixel_stride: 4
+wall_angular_bins: 90
+wall_depth_percentile: 10.0
+wall_safety_margin: 0.20
+wall_stop_distance: 0.50
+wall_emergency_stop_distance: 0.25
+wall_turn_speed: 0.50
+```
+
+默认从 detector 的 `color_intrinsics.fx` 和 `color_intrinsics.ppx` 读取相机投影参数。如果 detector 不提供内参，可在 wall 配置中显式填写 `camera_fx` 和 `camera_cx`。
 
 ## 低速验证
 

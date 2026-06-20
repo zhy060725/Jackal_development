@@ -7,7 +7,11 @@ import rospy
 from geometry_msgs.msg import Twist
 
 from my_robot_package.semantic_planner import PlannerConfig, SemanticPlanner
-from my_robot_package.yolo_capture_adapter import create_detector, normalize_detections
+from my_robot_package.yolo_capture_adapter import (
+    capture_and_predict,
+    create_detector,
+    normalize_detections,
+)
 
 
 def twist_from_command(command):
@@ -93,7 +97,7 @@ def main():
 
         while not rospy.is_shutdown():
             try:
-                capture_result = detector.capture()
+                capture_result, _ = capture_and_predict(detector)
                 detections = normalize_detections(capture_result.detections)
                 command = planner.plan(detections)
                 publisher.publish(twist_from_command(command))

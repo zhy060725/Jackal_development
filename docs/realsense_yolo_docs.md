@@ -16,7 +16,8 @@ pip install pyrealsense2 ultralytics numpy
 from detector import RealSenseYOLODetector
 
 with RealSenseYOLODetector("best.pt") as detector:
-    result = detector.capture()
+    color, depth, masked_depth = detector.capture()
+    result = detector.predict(color, depth)
 ```
 
 ---
@@ -52,18 +53,31 @@ Manually start or stop the RealSense pipeline.
 ```python
 detector = RealSenseYOLODetector("best.pt")
 detector.start()
-result = detector.capture()
+color, depth, masked_depth = detector.capture()
+result = detector.predict(color, depth)
 detector.stop()
 ```
 
 Prefer the context manager (`with` block) over manual start/stop — it guarantees `stop()` is called even if an exception occurs.
 
-### `capture() → CaptureResult`
+### `capture() → tuple[color, depth, masked_depth]`
 
-Grabs one aligned RGBD frame, runs YOLO detection, and returns a `CaptureResult`.
+Grabs one aligned RGBD frame. When blue masking is enabled, non-blue pixels in `masked_depth` are zero. Depth arrays remain in raw sensor units.
 
 ```python
-result = detector.capture()
+color, depth, masked_depth = detector.capture()
+
+color         # original np.ndarray, shape (H, W, 3), BGR
+depth         # np.ndarray, shape (H, W), uint16, raw depth units
+masked_depth  # np.ndarray, shape (H, W), uint16, zero outside blue regions
+```
+
+### `predict(color, depth) → CaptureResult`
+
+Runs YOLO and the configured color detector on an aligned frame pair:
+
+```python
+result = detector.predict(color, depth)
 
 result.color_image   # np.ndarray, shape (H, W, 3), BGR
 result.depth_image   # np.ndarray, shape (H, W), uint16, raw depth units
@@ -100,7 +114,8 @@ result.detections    # dict[str, list[DetectedObject]]
 
 ```python
 with RealSenseYOLODetector("best.pt", confidence_threshold=0.6) as detector:
-    result = detector.capture()
+    color, depth, masked_depth = detector.capture()
+    result = detector.predict(color, depth)
 
     for label, objects in result.detections.items():
         for obj in objects:
@@ -112,7 +127,8 @@ with RealSenseYOLODetector("best.pt", confidence_threshold=0.6) as detector:
 ```python
 with RealSenseYOLODetector("best.pt") as detector:
     while True:
-        result = detector.capture()
+        color, depth, masked_depth = detector.capture()
+        result = detector.predict(color, depth)
 
         cups = result.detections.get("cup", [])
         if cups:
@@ -126,8 +142,8 @@ with RealSenseYOLODetector("best.pt") as detector:
 import cv2
 
 with RealSenseYOLODetector("best.pt") as detector:
-    result = detector.capture()
-    cv2.imshow("Color", result.color_image)
+    color, depth, masked_depth = detector.capture()
+    cv2.imshow("Color", color)
     cv2.waitKey(0)
 ```
 
@@ -137,4 +153,5 @@ with RealSenseYOLODetector("best.pt") as detector:
 
 - `centroid_3d` returns `(0.0, 0.0, 0.0)` when depth is invalid (e.g. out of range or occluded).
 - Depth is aligned to the color frame automatically — no manual offset needed.
+- Convert raw depth or `masked_depth` to metres by multiplying by `detector.depth_scale`.
 - For more robust depth at the centroid, average over a small pixel window (e.g. 5×5) before projecting.

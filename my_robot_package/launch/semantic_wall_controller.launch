@@ -1,0 +1,16 @@
+<launch>
+  <arg name="base_config_file" default="$(find my_robot_package)/config/semantic_motion_controller.yaml"/>
+  <arg name="cruise_config_file" default="$(find my_robot_package)/config/semantic_cruise_controller.yaml"/>
+  <arg name="wall_config_file" default="$(find my_robot_package)/config/semantic_wall_controller.yaml"/>
+  <arg name="model_path" default=""/>
+
+  <node pkg="my_robot_package"
+        type="semantic_wall_controller.py"
+        name="semantic_wall_controller"
+        output="screen">
+    <rosparam command="load" file="$(arg base_config_file)"/>
+    <rosparam command="load" file="$(arg cruise_config_file)"/>
+    <rosparam command="load" file="$(arg wall_config_file)"/>
+    <param name="model_path" value="$(arg model_path)"/>
+  </node>
+</launch>

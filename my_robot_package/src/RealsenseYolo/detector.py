@@ -109,16 +109,14 @@ class RealSenseYOLODetector:
     def capture(self):
         """Capture an aligned pair of colour and depth frames from the RealSense.
 
-        When enable_blue_masking is True (the default), blue regions in the
-        colour image are replaced with grey (127, 127, 127) and depth data
-        outside those blue regions is set to zero.  This keeps depth only for
-        blue objects, which is useful when the scene is dominated by a single
-        blue target (e.g. a blue goal or bin).
+        When enable_blue_masking is True (the default), depth data outside blue
+        regions is set to zero. The returned colour image remains unchanged so
+        prediction receives the original RGB information.
 
         Returns
         -------
         color_image : np.ndarray (H, W, 3) uint8
-            BGR colour image (optionally blue-masked).
+            Original BGR colour image.
         depth_image : np.ndarray (H, W) uint16
         masked_depth:
             Depth image in sensor units (optionally masked to blue regions).
@@ -134,7 +132,7 @@ class RealSenseYOLODetector:
         masked_depth = depth_image.copy()
 
         if self.enable_blue_masking:
-            color_image, masked_depth = self._mask_blue(color_image, depth_image)
+            _, masked_depth = self._mask_blue(color_image, depth_image)
 
         return color_image, depth_image, masked_depth
 

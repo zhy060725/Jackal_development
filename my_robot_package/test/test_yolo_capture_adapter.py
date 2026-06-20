@@ -6,7 +6,11 @@ import types
 PACKAGE_SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(PACKAGE_SRC))
 
-from my_robot_package.yolo_capture_adapter import create_detector, normalize_detections
+from my_robot_package.yolo_capture_adapter import (
+    capture_and_predict,
+    create_detector,
+    normalize_detections,
+)
 
 
 class FakeObject(object):
@@ -57,3 +61,24 @@ def test_create_detector_imports_class_with_model_path(monkeypatch):
     assert isinstance(detector, FakeDetector)
     assert detector.model_path == "/tmp/best.pt"
     assert detector.confidence_threshold == 0.7
+
+
+def test_capture_and_predict_uses_three_value_detector_contract():
+    color = object()
+    depth = object()
+    masked_depth = object()
+    prediction = object()
+
+    class FakeDetector(object):
+        def capture(self):
+            return color, depth, masked_depth
+
+        def predict(self, captured_color, captured_depth):
+            assert captured_color is color
+            assert captured_depth is depth
+            return prediction
+
+    result, result_mask = capture_and_predict(FakeDetector())
+
+    assert result is prediction
+    assert result_mask is masked_depth

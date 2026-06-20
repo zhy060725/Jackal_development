@@ -23,6 +23,7 @@ def test_legacy_launch_files_exist():
         "keyboard_control.launch",
         "semantic_motion_controller.launch",
         "semantic_cruise_controller.launch",
+        "semantic_wall_controller.launch",
         "turn_circle.launch",
         "odom_test.launch",
     ]
@@ -56,4 +57,10 @@ def test_semantic_controller_launch_file_uses_expected_script():
 def test_semantic_cruise_launch_file_uses_expected_script():
     assert "semantic_cruise_controller.py" in _node_types(
         "semantic_cruise_controller.launch"
+    )
+
+
+def test_semantic_wall_launch_file_uses_expected_script():
+    assert "semantic_wall_controller.py" in _node_types(
+        "semantic_wall_controller.launch"
     )

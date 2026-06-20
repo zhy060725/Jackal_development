@@ -17,6 +17,7 @@ my_robot_package/
     keyboard_control.launch
     semantic_motion_controller.launch
     semantic_cruise_controller.launch
+    semantic_wall_controller.launch
     turn_circle.launch
     odom_test.launch
   src/
@@ -25,6 +26,7 @@ my_robot_package/
     keyboard_control.py
     semantic_motion_controller.py
     semantic_cruise_controller.py
+    semantic_wall_controller.py
     turn_circle.py
     odom_test.py
     my_robot_package/
@@ -33,11 +35,13 @@ my_robot_package/
       motion_mapper.py
       semantic_cruise_planner.py
       semantic_planner.py
+      semantic_wall_planner.py
       yolo_capture_adapter.py
   test/
     test_launch_compatibility.py
     test_motion_mapper.py
     test_semantic_cruise_planner.py
+    test_semantic_wall_planner.py
 ```
 
 这个包的目标是保留历史主机上已经使用过的命令入口，同时把底层运动逻辑写成更容易理解和维护的代码。
@@ -241,6 +245,16 @@ roslaunch my_robot_package semantic_cruise_controller.launch model_path:=/path/t
 
 无 `green_car` 时节点继续巡航，并避让 `black_cone` 和 `red_cone`；检测到目标后复用已有追捕评分。基础速度、避障距离和 detector 参数来自原配置，扩展配置只保存标签及巡航评分参数。
 
+### `semantic_wall_controller.launch`
+
+依次加载语义基础配置、巡航扩展配置和墙体扩展配置，启动 `src/semantic_wall_controller.py`：
+
+```bash
+roslaunch my_robot_package semantic_wall_controller.launch model_path:=/path/to/best.pt
+```
+
+该入口要求 detector 的 `capture()` 返回原始 RGB、原始深度和墙体 mask 深度，再通过 `predict()` 生成原有语义检测结果。
+
 ## Python 节点脚本
 
 ### `src/move_to_goal.py`
@@ -367,6 +381,10 @@ q or Esc: quit
 
 独立巡航语义控制节点。相机和目标处理方式与旧语义节点一致，但无目标时调用巡航 planner，而不是发布 `no_target` 停止。捕获异常、近障、无安全轨迹和退出时仍发布停止命令。
 
+### `src/semantic_wall_controller.py`
+
+独立墙体避障节点。它按 `capture_rgb, capture_depth, musk_depth = detector.capture()` 获取帧，再调用 `detector.predict(capture_rgb, capture_depth)`。墙体深度被压缩为局部点后，与语义检测一起交给 wall planner。接口、mask 或规划异常时发布停止。
+
 ## Python 逻辑模块
 
 ### `src/my_robot_package/motion_mapper.py`
@@ -444,6 +462,10 @@ from RealsenseYolo import RealSenseYOLODetector
 ### `src/my_robot_package/semantic_cruise_planner.py`
 
 继承现有语义 planner 的轨迹模拟、碰撞检查和追捕逻辑。没有目标时，对候选轨迹的前进速度、直行程度和 cone 净空评分，返回 `reason=cruise`；没有安全候选轨迹时返回零速度。
+
+### `src/my_robot_package/semantic_wall_planner.py`
+
+负责过滤 `musk_depth` 中的零值和无效值，按角度分箱保留稳健近墙深度，并利用相机内参转换为局部墙点。墙点作为硬安全约束加入巡航 planner；近墙时返回 `wall_escape`，紧急距离内返回 `wall_emergency_stop`。当前不包含出口策略。
 
 ### `src/my_robot_package/__init__.py`
 
@@ -553,6 +575,12 @@ roslaunch my_robot_package semantic_motion_controller.launch model_path:=/path/t
 
 ```bash
 roslaunch my_robot_package semantic_cruise_controller.launch model_path:=/path/to/best.pt
+```
+
+墙体、cone、巡航和绿车追捕：
+
+```bash
+roslaunch my_robot_package semantic_wall_controller.launch model_path:=/path/to/best.pt
 ```
 
 同时可观察：
