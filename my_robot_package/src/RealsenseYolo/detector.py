@@ -21,10 +21,8 @@ class CaptureResult:
 
 
 class RealSenseYOLODetector:
-    GREEN_LOWER1 = np.array([35, 40, 40])
-    GREEN_UPPER1 = np.array([85, 255, 255])
-    GREEN_LOWER2 = np.array([85, 40, 40])
-    GREEN_UPPER2 = np.array([95, 255, 255])
+    GREEN_LOWER1 = np.array([35, 100, 100])
+    GREEN_UPPER1 = np.array([75, 255, 255])
 
     def __init__(
         self,
@@ -34,7 +32,8 @@ class RealSenseYOLODetector:
         depth_resolution=(640, 480),
         fps=30,
         enable_green_detection=True,
-        min_green_area=5000,
+        min_green_area=1000,
+        exposure = 625.0
     ):
         self.model_path = model_path
         self.confidence_threshold = confidence_threshold
@@ -51,6 +50,7 @@ class RealSenseYOLODetector:
         self.align = None
         self.depth_scale = None
         self.color_intrinsics = None
+        self.exposure = exposure
 
     def start(self):
         self.pipeline = rs.pipeline()
@@ -80,6 +80,8 @@ class RealSenseYOLODetector:
 
         color_stream = profile.get_stream(rs.stream.color)
         self.color_intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
+
+        depth_sensor.set_option(rs.option.exposure, self.exposure)
 
     def stop(self):
         if self.pipeline is not None:
@@ -150,8 +152,7 @@ class RealSenseYOLODetector:
         hsv = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
 
         mask1 = cv2.inRange(hsv, self.GREEN_LOWER1, self.GREEN_UPPER1)
-        mask2 = cv2.inRange(hsv, self.GREEN_LOWER2, self.GREEN_UPPER2)
-        green_mask = cv2.bitwise_or(mask1, mask2)
+        green_mask = mask1
 
         green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_CLOSE, self._green_kernel, iterations=3)
         green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, self._green_kernel, iterations=2)
