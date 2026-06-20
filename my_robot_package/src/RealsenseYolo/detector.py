@@ -24,6 +24,11 @@ class RealSenseYOLODetector:
     GREEN_LOWER1 = np.array([35, 100, 100])
     GREEN_UPPER1 = np.array([75, 255, 255])
 
+    BLUE_LOWER1 = np.array([100, 80, 40])
+    BLUE_UPPER1 = np.array([120, 255, 255])
+    BLUE_LOWER2 = np.array([120, 80, 40])
+    BLUE_UPPER2 = np.array([135, 255, 255])
+
     def __init__(
         self,
         model_path,
@@ -33,7 +38,9 @@ class RealSenseYOLODetector:
         fps=30,
         enable_green_detection=True,
         min_green_area=1000,
-        exposure = 625.0
+        exposure=625.0,
+        enable_blue_masking=True,
+        min_blue_area=1000,
     ):
         self.model_path = model_path
         self.confidence_threshold = confidence_threshold
@@ -42,10 +49,13 @@ class RealSenseYOLODetector:
         self.fps = fps
         self.enable_green_detection = enable_green_detection
         self.min_green_area = min_green_area
+        self.enable_blue_masking = enable_blue_masking
+        self.min_blue_area = min_blue_area
 
         self.model = YOLO(model_path)
 
         self._green_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        self._blue_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
         self.pipeline = None
         self.align = None
         self.depth_scale = None
@@ -97,6 +107,22 @@ class RealSenseYOLODetector:
         return False
 
     def capture(self):
+        """Capture an aligned pair of colour and depth frames from the RealSense.
+
+        When enable_blue_masking is True (the default), blue regions in the
+        colour image are replaced with grey (127, 127, 127) and depth data
+        outside those blue regions is set to zero.  This keeps depth only for
+        blue objects, which is useful when the scene is dominated by a single
+        blue target (e.g. a blue goal or bin).
+
+        Returns
+        -------
+        color_image : np.ndarray (H, W, 3) uint8
+            BGR colour image (optionally blue-masked).
+        depth_image : np.ndarray (H, W) uint16
+        masked_depth:
+            Depth image in sensor units (optionally masked to blue regions).
+        """
         frames = self.pipeline.wait_for_frames()
         aligned = self.align.process(frames)
 
@@ -105,8 +131,12 @@ class RealSenseYOLODetector:
 
         color_image = np.asanyarray(color_frame.get_data())
         depth_image = np.asanyarray(depth_frame.get_data())
+        masked_depth = depth_image.copy()
 
-        return color_image, depth_image
+        if self.enable_blue_masking:
+            color_image, masked_depth = self._mask_blue(color_image, depth_image)
+
+        return color_image, depth_image, masked_depth
 
     def predict(self, color_image, depth_image):
         results = self.model(color_image, conf=self.confidence_threshold, verbose=False)
@@ -188,6 +218,35 @@ class RealSenseYOLODetector:
             objects.append(obj)
 
         return objects
+
+    def _mask_blue(self, color_image, depth_image):
+        """Mask blue areas with grey in color_image and zero out depth elsewhere.
+
+        Returns modified copies; originals are unchanged.
+        """
+        hsv = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
+
+        mask1 = cv2.inRange(hsv, self.BLUE_LOWER1, self.BLUE_UPPER1)
+        mask2 = cv2.inRange(hsv, self.BLUE_LOWER2, self.BLUE_UPPER2)
+        blue_mask = cv2.bitwise_or(mask1, mask2)
+
+        blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_CLOSE, self._blue_kernel, iterations=3)
+        blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, self._blue_kernel, iterations=2)
+
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(blue_mask, connectivity=8)
+
+        bulk_blue = np.zeros_like(blue_mask)
+        for i in range(1, num_labels):
+            if stats[i, cv2.CC_STAT_AREA] >= self.min_blue_area:
+                bulk_blue[labels == i] = 255
+
+        masked_color = color_image.copy()
+        masked_color[bulk_blue == 255] = (127, 127, 127)
+
+        masked_depth = depth_image.copy()
+        masked_depth[bulk_blue != 255] = 0
+
+        return masked_color, masked_depth
 
     def _project_to_3d(self, cx, cy, depth_image):
         h = self.color_intrinsics.height
